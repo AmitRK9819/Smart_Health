@@ -1,0 +1,82 @@
+"""
+Prediction / forecasting routes.
+
+Exposes the ML pipeline (Prophet demand forecasting + scikit-learn anomaly
+detection) through REST endpoints.
+"""
+
+from fastapi import APIRouter, HTTPException
+
+from app.models.schemas import PredictionRequest, PredictionResponse, FootfallRequest
+from app.ml.forecaster import forecast_demand
+from app.ml.forecast import forecast_footfall
+from app.ml.anomaly_detector import detect_anomalies
+from app.routes.inventory import _inventory
+
+router = APIRouter(prefix="/predictions", tags=["Predictions"])
+
+
+@router.post("/demand", response_model=PredictionResponse, summary="Forecast demand for a supply item")
+async def predict_demand(req: PredictionRequest):
+    if req.item_id not in _inventory:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+
+    item = _inventory[req.item_id]
+
+    forecast = forecast_demand(
+        item_id=req.item_id,
+        item_name=item.name,
+        current_quantity=item.quantity,
+        horizon_days=req.horizon_days,
+    )
+
+    anomalies = detect_anomalies(
+        item_id=req.item_id,
+        item_name=item.name,
+        current_quantity=item.quantity,
+    )
+
+    return PredictionResponse(
+        item_id=req.item_id,
+        item_name=item.name,
+        forecasted_demand=forecast,
+        anomaly_flags=anomalies,
+    )
+
+
+@router.get("/health", summary="ML pipeline health check")
+async def ml_health():
+    return {
+        "status": "ok",
+        "models": {
+            "forecaster": "prophet",
+            "anomaly_detector": "isolation_forest",
+        },
+    }
+
+
+# ── Shortage / Footfall prediction (standalone prefix) ──────────────────────
+# Mounted separately at /api in main.py → final URL: /api/predict-shortage
+
+shortage_router = APIRouter(tags=["Shortage Prediction"])
+
+
+@shortage_router.post(
+    "/predict-shortage",
+    summary="Predict patient footfall shortage for the next 7 days",
+    response_description="7-day footfall forecast with method metadata",
+)
+async def predict_shortage(body: FootfallRequest):
+    """
+    Accepts historical daily patient footfall and returns a 7-day forecast.
+
+    - **≥ 14 data points** → Facebook Prophet time-series model
+    - **< 14 data points** → 3-day simple moving average fallback
+    """
+    try:
+        history_dicts = [entry.model_dump() for entry in body.history]
+        result = await forecast_footfall(history_dicts)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
