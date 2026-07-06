@@ -3,12 +3,18 @@ Inventory management routes.
 
 Provides CRUD endpoints for healthcare supply items
 (masks, gloves, syringes, medications, etc.).
+
+Also exposes PHC-specific endpoints for Member 4 (DB integration):
+  POST /inventory/update          – log a stock update (stub; DB TBD)
+  GET  /inventory/status/{phc_id} – current stock levels for a PHC
 """
 
 from datetime import datetime
+from typing import Dict
+
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models.schemas import SupplyItem, SupplyItemCreate
+from app.models.schemas import SupplyItem, SupplyItemCreate, StockUpdate
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
@@ -82,3 +88,169 @@ async def delete_item(item_id: int):
     if item_id not in _inventory:
         raise HTTPException(status_code=404, detail="Item not found")
     del _inventory[item_id]
+
+
+# ── PHC Stock Endpoints (Member 4 will wire DB here) ─────────────────────────
+
+# ---------------------------------------------------------------------------
+# Mock stock data keyed by PHC ID.
+# Each entry follows the StockLevel structure:
+#   { medicine_name: { quantity, unit, reorder_level, status } }
+# Member 4: replace this dict (or its lookup) with real DB queries.
+# ---------------------------------------------------------------------------
+
+_MOCK_PHC_STOCK: Dict[str, Dict] = {
+    "PHC-001": {
+        "Paracetamol": {
+            "quantity": 520,
+            "unit": "tablets",
+            "reorder_level": 200,
+            "status": "adequate",
+        },
+        "ORS": {
+            "quantity": 85,
+            "unit": "sachets",
+            "reorder_level": 100,
+            "status": "low",
+        },
+        "Anti-venom": {
+            "quantity": 12,
+            "unit": "vials",
+            "reorder_level": 10,
+            "status": "adequate",
+        },
+    },
+    "PHC-002": {
+        "Paracetamol": {
+            "quantity": 130,
+            "unit": "tablets",
+            "reorder_level": 200,
+            "status": "low",
+        },
+        "ORS": {
+            "quantity": 310,
+            "unit": "sachets",
+            "reorder_level": 100,
+            "status": "adequate",
+        },
+        "Anti-venom": {
+            "quantity": 3,
+            "unit": "vials",
+            "reorder_level": 10,
+            "status": "critical",
+        },
+    },
+    "PHC-003": {
+        "Paracetamol": {
+            "quantity": 0,
+            "unit": "tablets",
+            "reorder_level": 200,
+            "status": "critical",
+        },
+        "ORS": {
+            "quantity": 200,
+            "unit": "sachets",
+            "reorder_level": 100,
+            "status": "adequate",
+        },
+        "Anti-venom": {
+            "quantity": 18,
+            "unit": "vials",
+            "reorder_level": 10,
+            "status": "adequate",
+        },
+    },
+}
+
+# Default fallback for any unknown PHC (keeps the endpoint from erroring).
+_DEFAULT_STOCK: Dict = {
+    "Paracetamol": {
+        "quantity": 250,
+        "unit": "tablets",
+        "reorder_level": 200,
+        "status": "adequate",
+    },
+    "ORS": {
+        "quantity": 150,
+        "unit": "sachets",
+        "reorder_level": 100,
+        "status": "adequate",
+    },
+    "Anti-venom": {
+        "quantity": 8,
+        "unit": "vials",
+        "reorder_level": 10,
+        "status": "low",
+    },
+}
+
+
+@router.post(
+    "/update",
+    tags=["PHC Stock"],
+    summary="Log a stock update for a PHC",
+    response_description="Acknowledgement that the update was received",
+)
+async def update_stock(update: StockUpdate):
+    """
+    Accept a :class:`StockUpdate` payload and log it to the console.
+
+    **Member 4 hook**: replace the ``print`` statement below with your
+    database write (e.g. ``db.add(StockUpdateModel(**update.model_dump()))``).
+    """
+    # ── TODO (Member 4): persist `update` to the database ─────────────────
+    print(
+        f"[STOCK UPDATE] PHC={update.phc_id!r} | "
+        f"Medicine={update.medicine_name!r} | "
+        f"Qty={update.quantity} | "
+        f"Timestamp={update.timestamp.isoformat()}"
+    )
+    # ──────────────────────────────────────────────────────────────────────
+
+    return {"status": "success", "message": "Stock logged"}
+
+
+@router.get(
+    "/status/{phc_id}",
+    tags=["PHC Stock"],
+    summary="Get current stock levels for a PHC",
+    response_description=(
+        "A mapping of medicine name to its current stock details "
+        "(quantity, unit, reorder_level, status)"
+    ),
+)
+async def get_phc_stock_status(phc_id: str):
+    """
+    Return the current stock levels for **Paracetamol**, **ORS**, and
+    **Anti-venom** at the requested Primary Health Centre.
+
+    **Member 4 hook**: replace the mock-data lookup below with a real DB
+    query filtered by ``phc_id``.
+
+    ### Response structure
+    ```json
+    {
+      "phc_id": "PHC-001",
+      "stock": {
+        "Paracetamol":  { "quantity": 520, "unit": "tablets",  "reorder_level": 200, "status": "adequate"  },
+        "ORS":          { "quantity":  85, "unit": "sachets",  "reorder_level": 100, "status": "low"       },
+        "Anti-venom":   { "quantity":  12, "unit": "vials",    "reorder_level":  10, "status": "adequate"  }
+      },
+      "last_updated": "2026-07-06T06:30:00Z"
+    }
+    ```
+
+    Possible ``status`` values:
+    - **`"adequate"`** – stock is above the reorder level
+    - **`"low"`** – stock is at or below the reorder level
+    - **`"critical"`** – stock is at zero or dangerously low
+    """
+    # ── TODO (Member 4): query DB for this phc_id instead of mock data ────
+    stock_data = _MOCK_PHC_STOCK.get(phc_id.upper(), _DEFAULT_STOCK)
+    # ──────────────────────────────────────────────────────────────────────
+
+    return {
+        "phc_id": phc_id.upper(),
+        "stock": stock_data,
+        "last_updated": datetime.utcnow().isoformat() + "Z",
+    }
