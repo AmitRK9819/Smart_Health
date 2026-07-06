@@ -2,7 +2,10 @@
 Pydantic schemas shared across routes.
 """
 
-from datetime import datetime
+import datetime as _dt
+from datetime import date as date_type, datetime
+from typing import List
+
 from pydantic import BaseModel, Field
 
 
@@ -76,4 +79,30 @@ class FootfallRequest(BaseModel):
         ...,
         min_length=1,
         description="Daily patient footfall history (date + count pairs)",
+    )
+
+
+# ── Health Centre Data ──────────────────────────────────────────────────────
+
+class StockUpdate(BaseModel):
+    """Represents a medicine stock update at a Primary Health Centre."""
+    phc_id: str = Field(..., description="Primary Health Centre identifier")
+    medicine_name: str = Field(..., description="Name of the medicine")
+    quantity: int = Field(..., description="Stock quantity")
+    timestamp: datetime = Field(..., description="Time of the stock update")
+
+
+class DailyFootfall(BaseModel):
+    """Daily patient footfall record for a Primary Health Centre."""
+    phc_id: str = Field(..., description="Primary Health Centre identifier")
+    date: date_type = Field(..., description="Date of the footfall record")
+    patient_count: int = Field(..., ge=0, description="Number of patients")
+
+
+class FootfallPredictionRequest(BaseModel):
+    """Request payload for footfall-based predictions, wrapping a list of DailyFootfall entries."""
+    footfall_data: List[DailyFootfall] = Field(
+        ...,
+        min_length=1,
+        description="List of daily footfall records to base predictions on",
     )

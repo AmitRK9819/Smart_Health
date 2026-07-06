@@ -1,94 +1,115 @@
-import subprocess
-import time
-import requests
+"""
+verify_backend.py
+=================
+
+Sends a mock FootfallPredictionRequest (30 days of DailyFootfall data) to the
+running FastAPI server and verifies it returns a valid 7-day forecast.
+
+Usage
+-----
+    # Terminal 1 – start the server
+    cd backend
+    uvicorn main:app --reload
+
+    # Terminal 2 – run this script
+    python verify_backend.py
+"""
+
 import json
 import random
-from datetime import datetime, timedelta
 import sys
-import socket
-import os
+from datetime import date, datetime, timedelta
 
-def is_port_in_use(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('127.0.0.1', port)) == 0
+import requests
 
-def main():
-    server_process = None
-    if not is_port_in_use(8000):
-        print("Starting FastAPI server...")
-        server_process = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"],
-            cwd=os.path.dirname(os.path.abspath(__file__))
+# ── Configuration ────────────────────────────────────────────────────────────
+
+BASE_URL = "http://127.0.0.1:8000"
+# shortage_router is mounted at /api in main.py → endpoint is /api/predict
+PREDICT_URL = f"{BASE_URL}/api/predict"
+
+DAYS_OF_HISTORY = 30
+MIN_PATIENT_COUNT = 40
+MAX_PATIENT_COUNT = 100
+EXPECTED_FORECAST_DAYS = 7
+
+
+def build_payload() -> dict:
+    """Generate 30 days of mock DailyFootfall records ending today."""
+    today = date.today()
+    footfall_data = []
+    for offset in range(DAYS_OF_HISTORY, 0, -1):
+        record_date = today - timedelta(days=offset)
+        footfall_data.append(
+            {
+                "phc_id": "PHC-TEST-001",
+                "date": record_date.isoformat(),
+                "patient_count": random.randint(
+                    MIN_PATIENT_COUNT, MAX_PATIENT_COUNT
+                ),
+            }
         )
-        print("Waiting 5 seconds for server to boot...")
-        time.sleep(5)
-    else:
-        print("Server is already running on port 8000.")
+    return {"footfall_data": footfall_data}
 
+
+def main() -> None:
+    print("=" * 60)
+    print("  verify_backend.py — Footfall Prediction Smoke Test")
+    print("=" * 60)
+
+    # ── Build payload ────────────────────────────────────────────────────
+    payload = build_payload()
+    print(
+        f"\n✔ Generated {len(payload['footfall_data'])} days of mock footfall "
+        f"data (patient_count {MIN_PATIENT_COUNT}–{MAX_PATIENT_COUNT})."
+    )
+    print(f"  Date range: {payload['footfall_data'][0]['date']} → "
+          f"{payload['footfall_data'][-1]['date']}")
+
+    # ── POST request ─────────────────────────────────────────────────────
+    print(f"\n→ POST {PREDICT_URL}")
     try:
-        # Generate mock data
-        history = []
-        base_date = datetime.now() - timedelta(days=5)
-        for i in range(5):
-            date_str = (base_date + timedelta(days=i)).strftime("%Y-%m-%d")
-            history.append({
-                "date": date_str,
-                "count": random.randint(50, 150)
-            })
-        
-        payload = {"history": history}
-        
-        url = "http://127.0.0.1:8000/api/predict-shortage"
-        print(f"Making POST request to {url}...")
-        
-        response = requests.post(url, json=payload)
-        
-        print("\n--- Response ---")
-        print(f"Status Code: {response.status_code}")
-        try:
-            resp_json = response.json()
-            print("Response JSON:")
-            print(json.dumps(resp_json, indent=2))
-        except ValueError:
-            print("Raw Response:", response.text)
-            print("\nFAILURE: Response is not valid JSON.")
-            return
+        response = requests.post(PREDICT_URL, json=payload, timeout=60)
+    except requests.ConnectionError:
+        print(
+            "\n✘ FAILURE: Could not connect to the server.\n"
+            "  Make sure the FastAPI server is running:\n"
+            "    cd backend && uvicorn main:app --reload"
+        )
+        sys.exit(1)
 
-        success = True
-        
-        if response.status_code != 200:
-            print("\nFAILURE: Status code is not 200.")
-            success = False
-            
-        if "predictions" not in resp_json:
-            print("\nFAILURE: 'predictions' key not found in response.")
-            success = False
-        else:
-            predictions = resp_json["predictions"]
-            if len(predictions) != 7:
-                print(f"\nFAILURE: Expected exactly 7 days of predictions, got {len(predictions)}.")
-                success = False
-                
-            for i, p in enumerate(predictions):
-                # The prompt mentioned confidence_interval, but our actual implementation uses lower_bound and upper_bound
-                for key in ["date", "predicted_count", "lower_bound", "upper_bound"]:
-                    if key not in p:
-                        print(f"\nFAILURE: Key '{key}' not found in prediction {i}.")
-                        success = False
+    # ── Assert status code ───────────────────────────────────────────────
+    print(f"  Status code: {response.status_code}")
+    assert response.status_code == 200, (
+        f"Expected 200 OK but got {response.status_code}.\n"
+        f"Response body: {response.text}"
+    )
+    print("  ✔ Status code is 200")
 
-        if success:
-            print("\nSUCCESS: All checks passed.")
-        else:
-            print("\nFAILURE: One or more checks failed.")
-            
-    except Exception as e:
-        print(f"\nFAILURE: An exception occurred: {e}")
-        
-    finally:
-        if server_process:
-            print("Terminating server...")
-            server_process.terminate()
-            server_process.wait()
+    # ── Print raw JSON response ──────────────────────────────────────────
+    resp_json = response.json()
+    print("\n── Raw JSON Response ──────────────────────────────────────")
+    print(json.dumps(resp_json, indent=2))
+    print("───────────────────────────────────────────────────────────")
+
+    # ── Validate response structure ──────────────────────────────────────
+    assert "predictions" in resp_json, "Missing 'predictions' key in response"
+
+    predictions = resp_json["predictions"]
+    assert len(predictions) == EXPECTED_FORECAST_DAYS, (
+        f"Expected {EXPECTED_FORECAST_DAYS} predictions, got {len(predictions)}"
+    )
+
+    required_keys = {"date", "predicted_count", "lower_bound", "upper_bound"}
+    for idx, pred in enumerate(predictions):
+        missing = required_keys - set(pred.keys())
+        assert not missing, (
+            f"Prediction [{idx}] is missing keys: {missing}"
+        )
+
+    print(f"\n✔ SUCCESS: Received {len(predictions)}-day forecast. "
+          "All assertions passed.")
+
 
 if __name__ == "__main__":
     main()

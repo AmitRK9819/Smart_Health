@@ -7,8 +7,13 @@ detection) through REST endpoints.
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.schemas import PredictionRequest, PredictionResponse, FootfallRequest
-from app.ml.forecaster import forecast_demand
+from app.models.schemas import (
+    FootfallPredictionRequest,
+    FootfallRequest,
+    PredictionRequest,
+    PredictionResponse,
+)
+from app.ml.forecaster import forecast_demand, predict_demand
 from app.ml.forecast import forecast_footfall
 from app.ml.anomaly_detector import detect_anomalies
 from app.routes.inventory import _inventory
@@ -80,3 +85,40 @@ async def predict_shortage(body: FootfallRequest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+
+@shortage_router.post(
+    "/predict",
+    summary="Predict patient footfall for the next 7 days",
+    response_description="7-day footfall forecast with predicted counts and confidence bounds",
+)
+async def predict_footfall(body: FootfallPredictionRequest):
+    """
+    Accepts a list of **DailyFootfall** records and returns a 7-day forecast.
+
+    - **≥ 14 records** → Facebook Prophet time-series model
+    - **< 14 records** → Simple Moving Average fallback (±20 % bounds)
+
+    Each returned item contains ``date``, ``predicted_count``,
+    ``lower_bound``, and ``upper_bound``.
+    """
+    try:
+        # Convert Pydantic models → plain dicts expected by predict_demand
+        records = [
+            {
+                "date": entry.date.isoformat(),
+                "patient_count": entry.patient_count,
+            }
+            for entry in body.footfall_data
+        ]
+
+        predictions = await predict_demand(records)
+
+        return {"predictions": predictions}
+
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed: {exc}",
+        )
