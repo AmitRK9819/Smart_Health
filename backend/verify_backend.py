@@ -7,11 +7,11 @@ running FastAPI server and verifies it returns a valid 7-day forecast.
 
 Usage
 -----
-    # Terminal 1 – start the server
+    # Terminal 1 - start the server
     cd backend
     uvicorn main:app --reload
 
-    # Terminal 2 – run this script
+    # Terminal 2 - run this script
     python verify_backend.py
 """
 
@@ -25,7 +25,7 @@ import requests
 # ── Configuration ────────────────────────────────────────────────────────────
 
 BASE_URL = "http://127.0.0.1:8000"
-# shortage_router is mounted at /api in main.py → endpoint is /api/predict
+# shortage_router is mounted at /api in main.py --> endpoint is /api/predict
 PREDICT_URL = f"{BASE_URL}/api/predict"
 
 DAYS_OF_HISTORY = 30
@@ -60,19 +60,19 @@ def main() -> None:
     # ── Build payload ────────────────────────────────────────────────────
     payload = build_payload()
     print(
-        f"\n✔ Generated {len(payload['footfall_data'])} days of mock footfall "
-        f"data (patient_count {MIN_PATIENT_COUNT}–{MAX_PATIENT_COUNT})."
+        f"\n[OK] Generated {len(payload['footfall_data'])} days of mock footfall "
+        f"data (patient_count {MIN_PATIENT_COUNT}-{MAX_PATIENT_COUNT})."
     )
-    print(f"  Date range: {payload['footfall_data'][0]['date']} → "
+    print(f"  Date range: {payload['footfall_data'][0]['date']} --> "
           f"{payload['footfall_data'][-1]['date']}")
 
     # ── POST request ─────────────────────────────────────────────────────
-    print(f"\n→ POST {PREDICT_URL}")
+    print(f"\n--> POST {PREDICT_URL}")
     try:
         response = requests.post(PREDICT_URL, json=payload, timeout=60)
     except requests.ConnectionError:
         print(
-            "\n✘ FAILURE: Could not connect to the server.\n"
+            "\n[FAIL] FAILURE: Could not connect to the server.\n"
             "  Make sure the FastAPI server is running:\n"
             "    cd backend && uvicorn main:app --reload"
         )
@@ -84,7 +84,7 @@ def main() -> None:
         f"Expected 200 OK but got {response.status_code}.\n"
         f"Response body: {response.text}"
     )
-    print("  ✔ Status code is 200")
+    print("  [OK] Status code is 200")
 
     # ── Print raw JSON response ──────────────────────────────────────────
     resp_json = response.json()
@@ -107,7 +107,7 @@ def main() -> None:
             f"Prediction [{idx}] is missing keys: {missing}"
         )
 
-    print(f"\n✔ SUCCESS: Received {len(predictions)}-day forecast. "
+    print(f"\n[OK] SUCCESS: Received {len(predictions)}-day forecast. "
           "All assertions passed.")
 
 
