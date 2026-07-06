@@ -63,3 +63,42 @@ def detect_anomalies(
         }
         for _, row in anomalies.iterrows()
     ]
+
+
+def detect_footfall_anomaly(history_records: list[dict]) -> bool:
+    """
+    Detect if the most recent daily footfall count is statistically
+    irregular compared to the historical trend using Isolation Forest.
+    
+    Parameters
+    ----------
+    history_records : list[dict]
+        List of historical footfall records, e.g. 
+        [{"date": "2026-07-01", "patient_count": 120}, ...]
+        Assumes the records are ordered chronologically and the last 
+        element is "today".
+        
+    Returns
+    -------
+    bool
+        True if the most recent record is an anomaly, False otherwise.
+    """
+    if not history_records or len(history_records) < 14:
+        # Not enough data to build a reliable baseline
+        return False
+        
+    df = pd.DataFrame(history_records)
+    if "patient_count" not in df.columns:
+        return False
+        
+    features = df[["patient_count"]].values
+    
+    # We use contamination="auto" or a fixed rate. 0.05 means 5% of data is expected to be anomaly.
+    model = IsolationForest(contamination=0.05, random_state=42, n_estimators=100)
+    
+    # Fit the model and predict anomalies (1 = normal, -1 = anomaly)
+    anomaly_labels = model.fit_predict(features)
+    
+    # Check the last record ("today")
+    is_anomaly = anomaly_labels[-1] == -1
+    return bool(is_anomaly)
