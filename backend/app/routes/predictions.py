@@ -13,7 +13,7 @@ from app.models.schemas import (
     PredictionRequest,
     PredictionResponse,
 )
-from app.ml.forecaster import forecast_demand, predict_demand
+from app.ml.forecaster import forecast_demand, predict_demand as predict_footfall_demand
 from app.ml.forecast import forecast_footfall
 from app.ml.anomaly_detector import detect_anomalies
 from app.routes.inventory import _inventory
@@ -111,7 +111,7 @@ async def predict_footfall(body: FootfallPredictionRequest):
             for entry in body.footfall_data
         ]
 
-        predictions = await predict_demand(records)
+        predictions = await predict_footfall_demand(records)
 
         return {"predictions": predictions}
 
