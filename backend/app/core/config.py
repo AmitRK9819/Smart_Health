@@ -19,8 +19,10 @@ def _parse_cors_origins() -> list[str]:
     raw = os.getenv("CORS_ORIGINS")
     if raw:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
-    # Fallback: allow common local dev servers
+    # Fallback: allow common local dev servers and production frontend deployments
     return [
+        "https://smart-health-gray-theta.vercel.app",
+        "https://smarthealth-production.up.railway.app",
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:5174",
