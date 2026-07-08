@@ -16,17 +16,34 @@ def get_pool():
     """
     Initialize and return a threaded PostgreSQL connection pool.
     Reads connection details from the DATABASE_URL environment variable.
+
+    Supabase requires SSL connections, so ``sslmode=require`` is
+    appended automatically when it is not already present in the URL.
     """
     global _connection_pool
     if _connection_pool is None:
         # Load environment variables automatically
         load_dotenv()
-        db_url = os.getenv("DATABASE_URL", "postgresql://smarthealth:smarthealth_dev@localhost:5432/smarthealth_db")
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            db_url = db_url.strip()
+
+        if not db_url:
+            db_url = (
+                "postgresql://postgres.podedwtxajduajsjqzar:orv%26nj0yer%21"
+                "@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres"
+            )
+
+        # Supabase requires SSL — ensure sslmode is set
+        if "sslmode" not in db_url:
+            separator = "&" if "?" in db_url else "?"
+            db_url += f"{separator}sslmode=require"
+
         try:
             # Using ThreadedConnectionPool to handle concurrent web requests (FastAPI) properly
             _connection_pool = pool.ThreadedConnectionPool(1, 20, db_url)
             if _connection_pool:
-                logger.info("Successfully created PostgreSQL connection pool")
+                logger.info("Successfully created PostgreSQL connection pool (Supabase)")
         except DatabaseError as e:
             logger.error(f"Error creating connection pool: {e}")
             raise

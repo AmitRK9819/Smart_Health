@@ -11,7 +11,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.schemas import BedsUpdate, AttendanceUpdate
+import time
+from app.models.schemas import BedsUpdate, AttendanceUpdate, FacilityCreate
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,68 @@ async def list_facilities():
     except Exception as e:
         logger.error("Failed to list facilities: %s", e)
         raise HTTPException(status_code=500, detail="Failed to list facilities")
+
+
+@router.post(
+    "/",
+    status_code=201,
+    summary="Register a new PHC facility in Supabase",
+    response_description="Created facility summary",
+)
+async def create_facility(facility_in: FacilityCreate):
+    """Create a new Primary Health Centre in Supabase with initial beds & inventory."""
+    phc_id = f"PHC-{int(time.time() * 1000) % 1000000:06d}"
+    try:
+        # Insert Facility
+        db.execute_query(
+            """
+            INSERT INTO facilities (phc_id, facility_name, facility_type, district, state, address, latitude, longitude)
+            VALUES (%s, %s, 'PHC', %s, 'State', %s, 12.9716, 77.5946)
+            """,
+            (phc_id, facility_in.name.strip(), facility_in.block.strip(), f"{facility_in.name.strip()}, {facility_in.block.strip()}")
+        )
+        # Insert initial beds
+        db.execute_query(
+            "INSERT INTO beds (phc_id, available_beds) VALUES (%s, 10)",
+            (phc_id,)
+        )
+        # Insert initial attendance
+        db.execute_query(
+            """
+            INSERT INTO phc_attendance_summary (phc_id, attendance_date, doctors_present, timestamp)
+            VALUES (%s, CURRENT_DATE, 2, NOW())
+            """,
+            (phc_id,)
+        )
+        # Insert stock items
+        for item in facility_in.stockItems:
+            m = db.fetch_one("SELECT item_id FROM medicines WHERE LOWER(name) = LOWER(%s)", (item.itemName.strip(),))
+            if not m:
+                m = db.fetch_one(
+                    "INSERT INTO medicines (name, category, unit, reorder_level) VALUES (%s, 'Essential', 'units', 50) RETURNING item_id",
+                    (item.itemName.strip(),)
+                )
+            if m and "item_id" in m:
+                item_id = m["item_id"]
+                db.execute_query(
+                    """
+                    INSERT INTO inventory (phc_id, item_id, batch_number, quantity, expiry_date)
+                    VALUES (%s, %s, 'INITIAL-BATCH', %s, CURRENT_DATE + INTERVAL '1 year')
+                    """,
+                    (phc_id, item_id, item.currentUnits)
+                )
+                if item.avgDailyConsumption > 0:
+                    db.execute_query(
+                        """
+                        INSERT INTO medicine_consumption (phc_id, item_id, consumption_date, quantity_consumed)
+                        VALUES (%s, %s, CURRENT_DATE, %s)
+                        """,
+                        (phc_id, item_id, item.avgDailyConsumption)
+                    )
+        return {"status": "success", "id": phc_id, "name": facility_in.name, "block": facility_in.block}
+    except Exception as e:
+        logger.error("Failed to create facility: %s", e)
+        raise HTTPException(status_code=500, detail="Database error creating facility")
 
 
 @router.post(

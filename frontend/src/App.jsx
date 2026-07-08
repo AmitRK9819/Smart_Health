@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PHCGrid } from './components/PHCGrid';
 import { RedistributionSankey } from './components/RedistributionSankey';
 import { LoginPage } from './components/LoginPage';
-import { phcData as initialPHCData } from './data/phcData';
-import { Activity, GitMerge, LogOut, Wifi, WifiOff, RefreshCw, Shield } from 'lucide-react';
+import { Activity, GitMerge, LogOut, RefreshCw, Shield, Database, AlertCircle } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -12,10 +11,11 @@ function App() {
   });
 
   const [activeTab, setActiveTab] = useState('overview');
-  const [phcs, setPhcs] = useState(initialPHCData);
+  const [phcs, setPhcs] = useState([]);
   const [isLive, setIsLive] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(true);
 
   const fetchLiveData = async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true);
@@ -23,7 +23,7 @@ function App() {
       const res = await fetch('http://localhost:8000/api/v1/facility/');
       if (res.ok) {
         const data = await res.json();
-        if (data && data.length > 0) {
+        if (data && Array.isArray(data)) {
           setPhcs(data);
           setIsLive(true);
           setLastSync(new Date().toLocaleTimeString());
@@ -34,14 +34,15 @@ function App() {
     } catch (err) {
       setIsLive(false);
     } finally {
+      setLoadingInitial(false);
       if (showSpinner) setTimeout(() => setRefreshing(false), 500);
     }
   };
 
   useEffect(() => {
     if (user) {
-      fetchLiveData();
-      const interval = setInterval(() => fetchLiveData(false), 3000);
+      fetchLiveData(true);
+      const interval = setInterval(() => fetchLiveData(false), 4000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -56,8 +57,9 @@ function App() {
     setUser(null);
   };
 
-  const handleAddPHC = (newPHC) => {
-    setPhcs([newPHC, ...phcs]);
+  const handleAddPHC = () => {
+    // When a new PHC is saved via AddPHCModal directly into Supabase, refresh the grid from DB
+    fetchLiveData(true);
   };
 
   if (!user) {
@@ -113,18 +115,18 @@ function App() {
               {isLive ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-emerald-400">Live Sync ON</span>
+                  <span className="text-emerald-400">Supabase DB Live</span>
                 </>
               ) : (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                  <span className="text-amber-400">Offline / Mock</span>
+                  <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                  <span className="text-red-400">API Offline</span>
                 </>
               )}
             </div>
             <button
               onClick={() => fetchLiveData(true)}
-              title="Force Refresh"
+              title="Force Refresh from Supabase"
               className="text-neutral-400 hover:text-white transition-colors cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -156,26 +158,40 @@ function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 p-6 md:p-12 overflow-y-auto w-full max-w-7xl mx-auto">
-        {/* Top bar warning if offline */}
-        {!isLive && (
-          <div className="mb-6 p-3 bg-amber-50 border-l-4 border-amber-500 text-amber-900 text-xs flex items-center justify-between shadow-sm rounded-r">
-            <div className="flex items-center gap-2">
-              <WifiOff className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>
-                <strong>Offline Mode:</strong> Could not connect to live API (`http://localhost:8000`). Displaying static backup data. Start the FastAPI server to sync live stock across all apps.
-              </span>
+        {/* Top bar status */}
+        {!isLive && !loadingInitial && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-900 text-xs flex items-center justify-between shadow-sm rounded-r">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+              <div>
+                <strong className="font-bold">Supabase API Offline:</strong> Could not reach backend server (`http://localhost:8000`). All hardcoded mock data has been removed. Please ensure the FastAPI backend is running (`python -m uvicorn main:app --reload`) to load live data from Supabase.
+              </div>
             </div>
             <button
               onClick={() => fetchLiveData(true)}
-              className="px-3 py-1 bg-amber-200/80 hover:bg-amber-300 font-bold uppercase tracking-wider text-[10px] rounded transition-colors cursor-pointer shrink-0 ml-4"
+              className="px-3 py-1.5 bg-red-200/80 hover:bg-red-300 font-bold uppercase tracking-wider text-[10px] rounded transition-colors cursor-pointer shrink-0 ml-4"
             >
               Retry Connection
             </button>
           </div>
         )}
 
-        {activeTab === 'overview' && <PHCGrid phcs={phcs} onAddPHC={handleAddPHC} />}
-        {activeTab === 'redistribution' && <RedistributionSankey phcs={phcs} />}
+        {loadingInitial ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-32">
+            <Activity className="w-8 h-8 text-[#111] animate-spin mb-4" />
+            <div className="text-xs font-bold tracking-[0.15em] uppercase text-[#111]">Loading Live Data from Supabase...</div>
+          </div>
+        ) : phcs.length === 0 && isLive ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20">
+            <Database className="w-10 h-10 text-gray-300 mb-3" />
+            <div className="text-gray-500 text-sm font-light uppercase tracking-widest">Supabase database connected, but no facilities found.</div>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'overview' && <PHCGrid phcs={phcs} onAddPHC={handleAddPHC} />}
+            {activeTab === 'redistribution' && <RedistributionSankey phcs={phcs} />}
+          </>
+        )}
       </main>
 
     </div>

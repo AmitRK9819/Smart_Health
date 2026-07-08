@@ -40,11 +40,12 @@ class Settings(BaseModel):
     # CORS — allow the frontend dev server by default
     cors_origins: list[str] = _parse_cors_origins()
 
-    # Database connection URL
+    # Database connection URL (Supabase)
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://smarthealth:smarthealth_dev@localhost:5432/smarthealth_db",
-    )
+        "postgresql://postgres.podedwtxajduajsjqzar:orv%26nj0yer%21"
+        "@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require",
+    ).strip()
 
 
 settings = Settings()

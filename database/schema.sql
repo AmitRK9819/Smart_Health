@@ -5,7 +5,7 @@
 
 BEGIN;
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- pgcrypto provides gen_random_uuid() — recommended on Supabase
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ----------------------------------------------------------
@@ -71,7 +71,7 @@ CREATE TABLE medicines (
 -- 3. INVENTORY (Single source of truth for stock)
 -- ----------------------------------------------------------
 CREATE TABLE inventory (
-    inventory_id    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    inventory_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phc_id          VARCHAR(50)  NOT NULL REFERENCES facilities (phc_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     item_id         INTEGER      NOT NULL REFERENCES medicines (item_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     batch_number    VARCHAR(100) NOT NULL DEFAULT 'DEFAULT_BATCH',
@@ -89,7 +89,7 @@ CREATE TABLE inventory (
 -- 4. BEDS (Used by backend `/facility/beds`)
 -- ----------------------------------------------------------
 CREATE TABLE beds (
-    bed_id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    bed_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phc_id          VARCHAR(50) NOT NULL UNIQUE REFERENCES facilities (phc_id) ON UPDATE CASCADE ON DELETE CASCADE,
     available_beds  INTEGER NOT NULL DEFAULT 0 CHECK (available_beds >= 0),
     timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -102,7 +102,7 @@ CREATE TABLE beds (
 -- 5. PERSONNEL & DETAILED ATTENDANCE
 -- ----------------------------------------------------------
 CREATE TABLE personnel (
-    personnel_id    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    personnel_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phc_id          VARCHAR(50)   NOT NULL REFERENCES facilities (phc_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     first_name      VARCHAR(100)  NOT NULL,
     last_name       VARCHAR(100)  NOT NULL,
@@ -120,7 +120,7 @@ CREATE TABLE personnel (
 );
 
 CREATE TABLE personnel_attendance (
-    attendance_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    attendance_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     personnel_id    UUID         NOT NULL REFERENCES personnel (personnel_id) ON UPDATE CASCADE ON DELETE CASCADE,
     phc_id          VARCHAR(50)  NOT NULL REFERENCES facilities (phc_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     attendance_date DATE         NOT NULL,
@@ -169,7 +169,7 @@ CREATE TABLE daily_footfall (
 -- 8. SYNCHRONIZATION LOG (Used by offline PHC App flow)
 -- ----------------------------------------------------------
 CREATE TABLE sync_log (
-    sync_log_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sync_log_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     offline_sync_id UUID         NOT NULL,
     device_id       VARCHAR(255) NOT NULL,
     phc_id          VARCHAR(50)  NOT NULL REFERENCES facilities (phc_id) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -189,7 +189,7 @@ CREATE TABLE sync_log (
 -- 9. INVENTORY TRANSACTIONS (Written on stock updates)
 -- ----------------------------------------------------------
 CREATE TABLE inventory_transactions (
-    transaction_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    transaction_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phc_id           VARCHAR(50)   NOT NULL REFERENCES facilities (phc_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     item_id          INTEGER       NOT NULL REFERENCES medicines (item_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     batch_number     VARCHAR(100),
@@ -212,7 +212,7 @@ CREATE TABLE inventory_transactions (
 -- 10. MEDICINE CONSUMPTION (Used by ML Demand Forecast)
 -- ----------------------------------------------------------
 CREATE TABLE medicine_consumption (
-    consumption_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    consumption_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phc_id           VARCHAR(50)   NOT NULL REFERENCES facilities (phc_id) ON UPDATE CASCADE ON DELETE CASCADE,
     item_id          INTEGER       NOT NULL REFERENCES medicines (item_id) ON UPDATE CASCADE ON DELETE CASCADE,
     consumption_date DATE          NOT NULL,

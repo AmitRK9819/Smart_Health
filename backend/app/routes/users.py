@@ -14,7 +14,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
 
-from app.models.schemas import User, UserCreate
+from app.models.schemas import User, UserCreate, UserLogin
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,39 @@ def get_password_hash(password: str) -> str:
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
+
+@router.post("/login", summary="Verify user credentials against Supabase database")
+async def login_user(login_in: UserLogin):
+    """Verify user login against the users table in Supabase. Returns user details & token."""
+    try:
+        query = """
+        SELECT id, username, email, role, password_hash, is_active
+        FROM users
+        WHERE LOWER(email) = LOWER(%s) OR LOWER(username) = LOWER(%s)
+        """
+        user = db.fetch_one(query, (login_in.email.strip(), login_in.email.strip()))
+    except Exception as e:
+        logger.error("Failed to query users for login: %s", e)
+        raise HTTPException(status_code=500, detail="Database error during login")
+
+    if not user or not user.get("is_active"):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    try:
+        if not pwd_context.verify(login_in.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+    except Exception as e:
+        logger.warning("Password verify failed: %s", e)
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "email": user["email"],
+        "role": user["role"],
+        "token": f"jwt-supabase-{user['id']}-{user['role']}"
+    }
+
 
 @router.get("/", response_model=list[User], summary="List all users")
 async def list_users():

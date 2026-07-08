@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, Activity } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, Activity, Database } from 'lucide-react';
 
 export const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -7,28 +7,32 @@ export const LoginPage = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    setTimeout(() => {
-      // Validate against requested credentials (admin@smarthealth.local / admin123)
-      if (
-        (email.trim().toLowerCase() === 'admin@smarthealth.local' && password === 'admin123') ||
-        (email.trim().toLowerCase() === 'admin' && password === 'admin123')
-      ) {
-        onLogin({
-          username: 'Admin Officer',
-          email: 'admin@smarthealth.local',
-          role: 'District Health Administrator',
-          token: 'kraft-jwt-token-998877',
-        });
-      } else {
-        setError('Invalid credentials. Please use admin@smarthealth.local / admin123');
-        setLoading(false);
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/users/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Invalid credentials. Please verify against Supabase users.');
       }
-    }, 600);
+
+      const userData = await response.json();
+      onLogin(userData);
+    } catch (err) {
+      setError(err.message || 'Unable to connect to Supabase backend API (http://localhost:8000). Ensure the backend is running.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fillDemoCredentials = () => {
@@ -56,8 +60,9 @@ export const LoginPage = ({ onLogin }) => {
         <h1 className="text-sm font-bold tracking-[0.25em] text-white uppercase text-center">
           District Health Command
         </h1>
-        <p className="text-[10px] text-neutral-400 mt-1 uppercase tracking-[0.3em] font-light text-center mb-8">
-          Authorized Access Only
+        <p className="text-[10px] text-neutral-400 mt-1 uppercase tracking-[0.3em] font-light text-center mb-8 flex items-center justify-center gap-1.5">
+          <Database className="w-3 h-3 text-emerald-400" />
+          Connected to Supabase DB
         </p>
 
         {/* Demo Credentials Helper Pill */}
@@ -70,7 +75,7 @@ export const LoginPage = ({ onLogin }) => {
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
             <div>
               <div className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold">
-                Click to auto-fill demo login:
+                Click to auto-fill demo login (Supabase):
               </div>
               <div className="text-xs font-mono text-emerald-400 mt-0.5">
                 admin@smarthealth.local / admin123
@@ -136,7 +141,7 @@ export const LoginPage = ({ onLogin }) => {
             {loading ? (
               <>
                 <Activity className="w-4 h-4 animate-spin" />
-                <span>Verifying Credentials...</span>
+                <span>Authenticating with Supabase...</span>
               </>
             ) : (
               <>
@@ -149,7 +154,7 @@ export const LoginPage = ({ onLogin }) => {
 
         {/* Footer info */}
         <div className="mt-8 pt-6 border-t border-neutral-800/80 w-full flex justify-between items-center text-[10px] text-neutral-500 font-mono">
-          <span>SYS_VER: 4.2.0-PROD</span>
+          <span>SYS_VER: 4.2.0-SUPABASE</span>
           <span>SEC: ENCRYPTED_SSL</span>
         </div>
       </div>

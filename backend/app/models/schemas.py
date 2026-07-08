@@ -95,6 +95,11 @@ class UserCreate(UserBase):
         return v
 
 
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
 class User(UserBase):
     id: int
     is_active: bool = True
@@ -217,3 +222,16 @@ class FootfallPredictionRequest(BaseModel):
         min_length=1,
         description="List of daily footfall records to base predictions on",
     )
+
+
+class StockItemInitial(BaseModel):
+    itemName: str = Field(..., description="Name of the medicine/item")
+    currentUnits: int = Field(default=0, ge=0)
+    avgDailyConsumption: int = Field(default=1, ge=1)
+
+
+class FacilityCreate(BaseModel):
+    name: str = Field(..., description="Name of the PHC facility")
+    block: str = Field(..., description="District or Block name")
+    stockItems: List[StockItemInitial] = Field(default_factory=list)
+

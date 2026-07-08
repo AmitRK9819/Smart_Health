@@ -31,25 +31,38 @@ def get_pool():
     Initialise and return a threaded PostgreSQL connection pool.
 
     Reads the ``DATABASE_URL`` environment variable (loaded via
-    ``python-dotenv``).  Falls back to a local default **only** if
-    ``DATABASE_URL`` is not set.  Never hardcode production credentials.
+    ``python-dotenv``).  Falls back to a placeholder that reminds
+    the developer to configure Supabase credentials.
+
+    Supabase requires SSL connections, so ``sslmode=require`` is
+    appended automatically when it is not already present in the URL.
     """
     global _connection_pool
     if _connection_pool is None:
         load_dotenv()
         db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            db_url = db_url.strip()
 
         if not db_url:
-            db_url = "postgresql://smarthealth:smarthealth_dev@localhost:5432/smarthealth_db"
-            logger.warning(
-                "DATABASE_URL not found in environment; using default fallback. "
-                "Set DATABASE_URL in your .env for production."
+            db_url = (
+                "postgresql://postgres.podedwtxajduajsjqzar:orv%26nj0yer%21"
+                "@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres"
             )
+            logger.warning(
+                "DATABASE_URL not found in environment; using fallback. "
+                "Set DATABASE_URL in your .env with your Supabase credentials."
+            )
+
+        # Supabase requires SSL — ensure sslmode is set
+        if "sslmode" not in db_url:
+            separator = "&" if "?" in db_url else "?"
+            db_url += f"{separator}sslmode=require"
 
         try:
             _connection_pool = pool.ThreadedConnectionPool(1, 20, db_url)
             if _connection_pool:
-                logger.info("Successfully created PostgreSQL connection pool")
+                logger.info("Successfully created PostgreSQL connection pool (Supabase)")
         except DatabaseError as e:
             logger.error("Error creating connection pool: %s", e)
             raise
