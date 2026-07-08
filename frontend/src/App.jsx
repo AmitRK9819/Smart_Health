@@ -3,6 +3,7 @@ import { PHCGrid } from './components/PHCGrid';
 import { RedistributionSankey } from './components/RedistributionSankey';
 import { LoginPage } from './components/LoginPage';
 import { Activity, GitMerge, LogOut, RefreshCw, Shield, Database, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from './config';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -20,7 +21,7 @@ function App() {
   const fetchLiveData = async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/facility/');
+      const res = await fetch(`${API_BASE_URL}/api/v1/facility/`);
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data)) {
@@ -164,7 +165,7 @@ function App() {
             <div className="flex items-center gap-2.5">
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
               <div>
-                <strong className="font-bold">Supabase API Offline:</strong> Could not reach backend server (`http://localhost:8000`). All hardcoded mock data has been removed. Please ensure the FastAPI backend is running (`python -m uvicorn main:app --reload`) to load live data from Supabase.
+                <strong className="font-bold">Supabase API Offline:</strong> Could not reach backend server (`{API_BASE_URL}`). All hardcoded mock data has been removed. Please ensure the FastAPI backend is online and running to load live data from Supabase.
               </div>
             </div>
             <button

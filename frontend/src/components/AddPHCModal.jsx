@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Activity, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export const AddPHCModal = ({ onClose, onAdd }) => {
   const [name, setName] = useState('');
@@ -32,7 +33,7 @@ export const AddPHCModal = ({ onClose, onAdd }) => {
     };
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/facility/', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/facility/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

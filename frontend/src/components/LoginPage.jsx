@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, Activity, Database } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -13,7 +14,7 @@ export const LoginPage = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/users/login', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -29,7 +30,7 @@ export const LoginPage = ({ onLogin }) => {
       const userData = await response.json();
       onLogin(userData);
     } catch (err) {
-      setError(err.message || 'Unable to connect to Supabase backend API (http://localhost:8000). Ensure the backend is running.');
+      setError(err.message || `Unable to connect to Supabase backend API (${API_BASE_URL}). Ensure the backend is running.`);
     } finally {
       setLoading(false);
     }
